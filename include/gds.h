@@ -335,6 +335,7 @@ GDS_API gds_elem_t *gds_elem_create_boundary(uint8_t, uint8_t, uint8_t, gds_xy_t
 GDS_API gds_elem_t *gds_elem_create_path(uint8_t, uint8_t, uint8_t, gds_xy_t*);
 GDS_API gds_elem_t *gds_elem_create_sref(const char*, gds_xy_t);
 GDS_API gds_elem_t *gds_elem_create_aref(const char*, uint16_t, uint16_t, gds_xy_t, gds_xy_t, gds_xy_t);
+GDS_API gds_elem_t *gds_elem_create_text(uint8_t, uint8_t, gds_xy_t, const char*);
 GDS_API void gds_elem_destroy(gds_elem_t*);
 GDS_API int gds_elem_get_kind(gds_elem_t*);
 GDS_API uint16_t gds_elem_get_layer(gds_elem_t*);
@@ -343,7 +344,8 @@ GDS_API void gds_elem_set_strans(gds_elem_t*, gds_strans_t);
 GDS_API gds_strans_t gds_elem_get_strans(gds_elem_t*);
 GDS_API gds_xy_t *gds_elem_get_xy(gds_elem_t*);
 GDS_API uint16_t gds_elem_get_num_xy(gds_elem_t*);
-
+GDS_API const char *gds_elem_get_sname(gds_elem_t*);
+GDS_API const char *gds_elem_get_text(gds_elem_t*);
 
 #ifdef __cplusplus
 }

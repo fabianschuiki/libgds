@@ -7,7 +7,7 @@ project(libgds)
 if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE release)
 endif()
-message("## phalanx ${CMAKE_BUILD_TYPE} build")
+message("## libgds ${CMAKE_BUILD_TYPE} build")
 
 # Compiler Flags
 include_directories(${PROJECT_BINARY_DIR})

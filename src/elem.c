@@ -65,6 +65,29 @@ parse_layer_and_type(gds_parser_t *parser, uint16_t *layer, uint16_t rt, uint16_
 }
 
 
+static void
+parse_strans(gds_parser_t *parser, gds_strans_t *strans) {
+	assert(parser && strans);
+
+	// STRANS
+	strans->flags = gds_parser_get_record(parser)->data.strans;
+	gds_parser_next(parser);
+
+	// MAG
+	if (gds_parser_accept(parser, GDS_RT_MAG)) {
+		strans->mag = gds_real64_to_double(gds_parser_get_record(parser)->data.mag);
+		gds_parser_next(parser);
+	}
+
+	// ANGLE
+	if (gds_parser_accept(parser, GDS_RT_ANGLE)) {
+		int64_t src = gds_parser_get_record(parser)->data.angle;
+		strans->angle = gds_real64_to_double(src);
+		gds_parser_next(parser);
+	}
+}
+
+
 bool
 gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 	gds_record_t *rec;
@@ -108,11 +131,80 @@ gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 		rec = gds_parser_get_record(parser);
 		elem = gds_elem_create_path(layer, type, (rec->size-4)/8, rec->data.xy);
 		gds_parser_next(parser);
-
 	}
 
 	// SREF
+	else if (gds_parser_accept(parser, GDS_RT_SREF)) {
+		skip_unused(parser);
+		gds_parser_next(parser);
+
+		// SNAME
+		if (!gds_parser_require(parser, GDS_RT_SNAME))
+			return false;
+		char *name = gds_parser_copy_string(parser);
+		gds_parser_next(parser);
+
+		// STRANS
+		gds_strans_t strans = { .mag = 1 };
+		if (gds_parser_accept(parser, GDS_RT_STRANS)) {
+			parse_strans(parser, &strans);
+		}
+
+		// XY
+		if (!gds_parser_require(parser, GDS_RT_XY)) {
+			free(name);
+			return false;
+		}
+		gds_xy_t xy = gds_parser_get_record(parser)->data.xy[0];
+		gds_parser_next(parser);
+
+		elem = gds_elem_create_sref(name, xy);
+		gds_elem_set_strans(elem, strans);
+		free(name);
+	}
+
 	// AREF
+	else if (gds_parser_accept(parser, GDS_RT_AREF)) {
+		skip_unused(parser);
+		gds_parser_next(parser);
+
+		// SNAME
+		if (!gds_parser_require(parser, GDS_RT_SNAME))
+			return false;
+		char *name = gds_parser_copy_string(parser);
+		gds_parser_next(parser);
+
+		// STRANS
+		gds_strans_t strans = { .mag = 1 };
+		if (gds_parser_accept(parser, GDS_RT_STRANS)) {
+			parse_strans(parser, &strans);
+		}
+
+		// COLROW
+		if (!gds_parser_require(parser, GDS_RT_COLROW)) {
+			free(name);
+			return false;
+		}
+		int16_t num_col = gds_parser_get_record(parser)->data.colrow.c;
+		int16_t num_row = gds_parser_get_record(parser)->data.colrow.r;
+		gds_parser_next(parser);
+
+		// XY
+		if (!gds_parser_require(parser, GDS_RT_XY)) {
+			free(name);
+			return false;
+		}
+		gds_xy_t xy[3] = {
+			gds_parser_get_record(parser)->data.xy[0],
+			gds_parser_get_record(parser)->data.xy[1],
+			gds_parser_get_record(parser)->data.xy[2]
+		};
+		gds_parser_next(parser);
+
+		elem = gds_elem_create_aref(name, num_col, num_row, xy[0], xy[1], xy[2]);
+		gds_elem_set_strans(elem, strans);
+		free(name);
+	}
 
 	// TEXT
 	else if (gds_parser_accept(parser, GDS_RT_TEXT)) {
@@ -160,7 +252,8 @@ gds_elem_write(gds_elem_t *elem, gds_writer_t *wr) {
 
 	// LAYER
 	if (elem->kind == GDS_ELEM_BOUNDARY ||
-		elem->kind == GDS_ELEM_PATH) {
+		elem->kind == GDS_ELEM_PATH ||
+		elem->kind == GDS_ELEM_TEXT) {
 		char buffer[6];
 		struct gds_record *rec = (void*)buffer;
 		rec->size = 6;
@@ -184,6 +277,20 @@ gds_elem_write(gds_elem_t *elem, gds_writer_t *wr) {
 			return err;
 	}
 
+	// TEXTTYPE
+	if (elem->kind == GDS_ELEM_TEXT) {
+		char buffer[6];
+		struct gds_record *rec = (void*)buffer;
+		rec->size = 6;
+		rec->type = GDS_RT_TEXTTYPE;
+		rec->data.texttype = elem->type;
+		err = gds_write(wr, rec);
+	}
+
+	// PRESENTATION (TEXT)
+	// PATHTYPE (TEXT|PATH)
+	// WIDTH (TEXT|PATH)
+
 	// SNAME
 	if (elem->kind == GDS_ELEM_SREF ||
 		elem->kind == GDS_ELEM_AREF) {
@@ -200,14 +307,12 @@ gds_elem_write(gds_elem_t *elem, gds_writer_t *wr) {
 		struct gds_record *rec = (void*)buffer;
 
 		// STRANS
-		if (elem->strans != 0) {
-			rec->size = 6;
-			rec->type = GDS_RT_STRANS;
-			rec->data.strans = elem->strans;
-			err = gds_write(wr, rec);
-			if (err != GDS_OK)
-				return err;
-		}
+		rec->size = 6;
+		rec->type = GDS_RT_STRANS;
+		rec->data.strans = elem->strans;
+		err = gds_write(wr, rec);
+		if (err != GDS_OK)
+			return err;
 
 		// MAG
 		if (elem->mag != 1) {
@@ -223,7 +328,7 @@ gds_elem_write(gds_elem_t *elem, gds_writer_t *wr) {
 		if (elem->angle != 0) {
 			rec->size = 12;
 			rec->type = GDS_RT_ANGLE;
-			rec->data.mag = gds_double_to_real64(elem->angle);
+			rec->data.angle = gds_double_to_real64(elem->angle);
 			err = gds_write(wr, rec);
 			if (err != GDS_OK)
 				return err;
@@ -250,6 +355,20 @@ gds_elem_write(gds_elem_t *elem, gds_writer_t *wr) {
 	err = gds_write_record_data(wr, GDS_RT_XY, elem->num_xy * 8, elem->xy);
 	if (err != GDS_OK)
 		return err;
+
+	// STRING
+	if (elem->kind == GDS_ELEM_TEXT) {
+		err = gds_write_string(wr, GDS_RT_STRING, elem->sname);
+		if (err != GDS_OK)
+			return err;
+		// size_t len = strlen(elem->sname);
+		// err = gds_write_record_hdr(wr, 4 + len, GDS_RT_STRING);
+		// if (err != GDS_OK)
+		// 	return err;
+		// err = gds_write_record_data(wr, GDS_RT_STRING, len, elem->sname);
+		// if (err != GDS_OK)
+		// 	return err;
+	}
 
 	// ENDEL
 	err = gds_write_void(wr, GDS_RT_ENDEL);
@@ -326,6 +445,19 @@ gds_elem_create_aref(const char *sname, uint16_t n_col, uint16_t n_row, gds_xy_t
 }
 
 
+gds_elem_t *
+gds_elem_create_text(uint8_t layer, uint8_t type, gds_xy_t xy, const char *text) {
+	assert(text);
+	size_t len = strlen(text)+1;
+	gds_elem_t *elem = gds_elem_create(GDS_ELEM_TEXT, 1, &xy, len);
+	elem->layer = layer;
+	elem->type = type;
+	elem->sname = (void*)elem + sizeof(gds_elem_t);
+	memcpy(elem->sname, text, len);
+	return elem;
+}
+
+
 void
 gds_elem_destroy(gds_elem_t *elem) {
 	assert(elem);
@@ -385,4 +517,18 @@ uint16_t
 gds_elem_get_num_xy(gds_elem_t *elem) {
 	assert(elem);
 	return elem->num_xy;
+}
+
+
+const char *
+gds_elem_get_sname(gds_elem_t *elem) {
+	assert(elem && (elem->kind == GDS_ELEM_SREF || elem->kind == GDS_ELEM_AREF));
+	return elem->sname;
+}
+
+
+const char *
+gds_elem_get_text(gds_elem_t *elem) {
+	assert(elem && elem->kind == GDS_ELEM_TEXT);
+	return elem->sname;
 }

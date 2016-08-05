@@ -56,7 +56,8 @@ gds_real64_to_double(gds_real64_t v) {
 
 	// Adjust the exponent.
 	int16_t exp = ((int16_t)ve - 64)*4;
-	for (; (vm >> 52) > 1; --exp, vm >>= 1);
+	exp -= 4;
+	for (; (vm >> 52) > 1; ++exp, vm >>= 1);
 	ve = (uint64_t)(exp + 1023) & 0x7FF;
 
 	// Pack as double.
