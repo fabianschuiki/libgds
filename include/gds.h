@@ -1,29 +1,16 @@
-/* Copyright (c) 2016 Fabian Schuiki */
-#pragma once
-#ifdef __cplusplus
-extern "C" {
-#endif
+${HEADER_PREFIX}
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-#ifndef GDS_API
-	#if __GNUC__ >= 4
-		#define GDS_API __attribute__((visibility("default")))
-	#else
-		#define GDS_API
-	#endif
-#endif
+// Library version
+#define GDS_VERSION_MAJOR @GDS_VERSION_MAJOR@
+#define GDS_VERSION_MINOR @GDS_VERSION_MINOR@
+#define GDS_VERSION_PATCH @GDS_VERSION_PATCH@
+#define GDS_VERSION_STRING "@GDS_VERSION@"
 
-#ifndef GDS_PACKED
-	#if defined(__GNUC__)
-		#define GDS_PACKED __attribute__((packed))
-	#else
-		#error GDS_PACKED not implemented for this compiler
-	#endif
-#endif
-
+// Definition of types used throughout the library.
 typedef struct gds_reader gds_reader_t;
 typedef struct gds_writer gds_writer_t;
 typedef struct gds_lib gds_lib_t;
@@ -294,13 +281,13 @@ struct gds_strans {
 };
 
 enum gds_elem_kind {
-	GDS_ELEM_BOUNDARY,
-	GDS_ELEM_PATH,
-	GDS_ELEM_SREF,
-	GDS_ELEM_AREF,
-	GDS_ELEM_TEXT,
-	GDS_ELEM_NODE,
-	GDS_ELEM_BOX,
+	GDS_ELEM_BOUNDARY = 1,
+	GDS_ELEM_PATH     = 2,
+	GDS_ELEM_SREF     = 3,
+	GDS_ELEM_AREF     = 4,
+	GDS_ELEM_TEXT     = 5,
+	GDS_ELEM_NODE     = 6,
+	GDS_ELEM_BOX      = 7,
 };
 
 GDS_API int gds_lib_read(gds_lib_t**, gds_reader_t*);
@@ -347,6 +334,5 @@ GDS_API uint16_t gds_elem_get_num_xy(gds_elem_t*);
 GDS_API const char *gds_elem_get_sname(gds_elem_t*);
 GDS_API const char *gds_elem_get_text(gds_elem_t*);
 
-#ifdef __cplusplus
-}
-#endif
+
+${HEADER_SUFFIX}
