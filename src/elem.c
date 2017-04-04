@@ -50,18 +50,30 @@ skip_unused(gds_parser_t *parser) {
 }
 
 
-static void
+static int
 parse_layer_and_type(gds_parser_t *parser, uint16_t *layer, uint16_t rt, uint16_t *type) {
 	assert(parser && layer && type);
+
+	// Skip the element type record.
 	gds_parser_next(parser); // element type record
+
+	// LAYER
 	if (gds_parser_require(parser, GDS_RT_LAYER)) {
 		*layer = gds_parser_get_record(parser)->data.layer;
 		gds_parser_next(parser);
+	} else {
+		return 0;
 	}
+
+	// type
 	if (gds_parser_require(parser, rt)) {
 		*type = gds_parser_get_record(parser)->data.layer;
 		gds_parser_next(parser);
+	} else {
+		return 0;
 	}
+
+	return 1;
 }
 
 
@@ -92,13 +104,13 @@ bool
 gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 	gds_record_t *rec;
 	gds_elem_t *elem = NULL;
-	uint16_t layer, type;
+	uint16_t layer = 0, type = 0;
 	assert(out && parser);
 
 	// BOUNDARY
 	if (gds_parser_accept(parser, GDS_RT_BOUNDARY)) {
-		skip_unused(parser);
 		parse_layer_and_type(parser, &layer, GDS_RT_DATATYPE, &type);
+		skip_unused(parser);
 
 		// XY
 		if (!gds_parser_require(parser, GDS_RT_XY))
@@ -110,8 +122,8 @@ gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 
 	// PATH
 	else if (gds_parser_accept(parser, GDS_RT_PATH)) {
-		skip_unused(parser);
 		parse_layer_and_type(parser, &layer, GDS_RT_DATATYPE, &type);
+		skip_unused(parser);
 
 		// PATHTYPE
 		if (gds_parser_accept(parser, GDS_RT_PATHTYPE)) {
@@ -135,8 +147,8 @@ gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 
 	// SREF
 	else if (gds_parser_accept(parser, GDS_RT_SREF)) {
-		skip_unused(parser);
 		gds_parser_next(parser);
+		skip_unused(parser);
 
 		// SNAME
 		if (!gds_parser_require(parser, GDS_RT_SNAME))
@@ -165,8 +177,8 @@ gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 
 	// AREF
 	else if (gds_parser_accept(parser, GDS_RT_AREF)) {
-		skip_unused(parser);
 		gds_parser_next(parser);
+		skip_unused(parser);
 
 		// SNAME
 		if (!gds_parser_require(parser, GDS_RT_SNAME))
@@ -208,11 +220,50 @@ gds_elem_read(gds_elem_t **out, gds_parser_t *parser) {
 
 	// TEXT
 	else if (gds_parser_accept(parser, GDS_RT_TEXT)) {
+		parse_layer_and_type(parser, &layer, GDS_RT_TEXTTYPE, &type);
 		skip_unused(parser);
-		gds_parser_skip_until(parser, GDS_RT_ENDEL);
+
+		// PRESENTATION
+		if (gds_parser_accept(parser, GDS_RT_PRESENTATION)) {
+			gds_parser_next(parser);
+			/// @todo: Store PRESENTATION.
+		}
+
+		// PATHTYPE
+		if (gds_parser_accept(parser, GDS_RT_PATHTYPE)) {
+			gds_parser_next(parser);
+			/// @todo: Store PATHTYPE.
+		}
+
+		// WIDTH
+		if (gds_parser_accept(parser, GDS_RT_WIDTH)) {
+			gds_parser_next(parser);
+			/// @todo: Store WIDTH.
+		}
+
+		// STRANS
+		gds_strans_t strans = { .mag = 1 };
+		if (gds_parser_accept(parser, GDS_RT_STRANS)) {
+			parse_strans(parser, &strans);
+		}
+
+		// XY
+		if (!gds_parser_require(parser, GDS_RT_XY))
+			return false;
+		gds_xy_t xy = gds_parser_get_record(parser)->data.xy[0];
+		gds_parser_next(parser);
+
+		// STRING
+		if (!gds_parser_require(parser, GDS_RT_STRING))
+			return false;
+		char *text = gds_parser_copy_string(parser);
+		gds_parser_next(parser);
+
+		elem = gds_elem_create_text(layer, type, xy, text);
+		gds_elem_set_strans(elem, strans);
+		free(text);
 	}
 
-	// TEXT
 	// NODE
 	// BOX
 
