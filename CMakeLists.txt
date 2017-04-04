@@ -46,6 +46,13 @@ add_library(gds
 )
 
 
+# Build the debug program.
+add_executable(gdsdebug
+	src/debug.c
+)
+target_link_libraries(gdsdebug gds)
+
+
 # Configure the installation.
-install(TARGETS gds ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+install(TARGETS gds gdsdebug ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(FILES ${PROJECT_BINARY_DIR}/include/gds.h DESTINATION include)
